@@ -1,24 +1,360 @@
-import { useState } from 'react';
+import { useEffect, useState } from "react";
+import { catalog } from "../domain/catalog";
+import { colorDistance, findRecipes } from "../domain/mixing";
+import type { Paint, Recipe } from "../domain/types";
+import { PhotoPicker } from "../features/image-selection/PhotoPicker";
+import { PaintInventory } from "../features/paint-inventory/PaintInventory";
+import { RecipeCard } from "../features/recipes/RecipeCard";
+import { BackupPanel } from "../features/settings/BackupPanel";
+import { db } from "../storage/db";
 
 const sections = [
-  { id: 'home', label: 'Inicio', symbol: '⌂' },
-  { id: 'mix', label: 'Crear mezcla', symbol: '◉' },
-  { id: 'paints', label: 'Mis pinturas', symbol: '▣' },
-  { id: 'recipes', label: 'Mis recetas', symbol: '▤' },
-  { id: 'settings', label: 'Configuración', symbol: '⚙' },
+  { id: "home", label: "Inicio", symbol: "⌂" },
+  { id: "mix", label: "Crear mezcla", symbol: "◉" },
+  { id: "paints", label: "Mis pinturas", symbol: "▣" },
+  { id: "recipes", label: "Mis recetas", symbol: "▤" },
+  { id: "settings", label: "Configuración", symbol: "⚙" },
 ] as const;
 
-type Section = typeof sections[number]['id'];
+type Section = (typeof sections)[number]["id"];
 
 export function App() {
-  const [section, setSection] = useState<Section>('home');
+  const [section, setSection] = useState<Section>("home");
+  const [paints, setPaints] = useState<Paint[]>([]);
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [targetHex, setTargetHex] = useState<string | null>(null);
+  const [mode, setMode] = useState<"mine" | "reference">("mine");
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [working, setWorking] = useState(false);
+  const [storageError, setStorageError] = useState("");
 
-  return <div className="app-shell">
-    <header className="topbar"><div className="brand-mark">O</div><div className="brand"><strong>OleoPalette</strong><span>TU TALLER DE COLOR</span></div><div className="topbar-accent" aria-hidden="true">✦</div></header>
-    <main id="main-content" className="content">
-      {section === 'home' && <section className="home"><div className="eyebrow">EL COLOR EMPIEZA AQUÍ</div><h1>Tu próximo color,<br /><em>mezclado por ti.</em></h1><p className="intro">Elige un tono de tu foto y descubre cómo acercarte a él con las pinturas que tienes.</p><button className="primary-action" onClick={() => setSection('mix')}>Crear una mezcla <span aria-hidden="true">→</span></button><div className="hero-card" aria-hidden="true"><div className="paint-stroke stroke-1" /><div className="paint-stroke stroke-2" /><div className="paint-stroke stroke-3" /><div className="palette-circle"><i /><i /><i /><i /></div></div><div className="section-heading"><span>ASÍ DE SIMPLE</span><h2>De la inspiración al lienzo</h2></div><div className="steps"><article><b>01</b><h3>Encuentra el color</h3><p>Elige una foto y toca el tono que te inspira.</p></article><article><b>02</b><h3>Explora mezclas</h3><p>Busca con tus pinturas o una paleta sugerida.</p></article><article><b>03</b><h3>Pinta a tu manera</h3><p>Prepara una pequeña muestra y ajusta a ojo.</p></article></div></section>}
-      {section !== 'home' && <section className="page"><div className="eyebrow">TU TALLER</div><h1>{sections.find((item) => item.id === section)?.label}</h1><p className="intro">Prepara tus colores con calma y confianza.</p></section>}
-    </main>
-    <nav className="bottom-nav" aria-label="Navegación principal">{sections.map((item) => <button key={item.id} type="button" aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}><span className="nav-symbol" aria-hidden="true">{item.symbol}</span><span>{item.label}</span></button>)}</nav>
-  </div>;
+  useEffect(() => {
+    void Promise.all([db.paints.toArray(), db.recipes.toArray()])
+      .then(([storedPaints, storedRecipes]) => {
+        setPaints(storedPaints);
+        setSavedRecipes(storedRecipes);
+      })
+      .catch(() =>
+        setStorageError("No se pudo abrir el almacenamiento local."),
+      );
+  }, []);
+  async function savePaint(paint: Paint) {
+    await db.paints.put(paint);
+    setPaints(await db.paints.toArray());
+  }
+  async function deletePaint(id: string) {
+    await db.paints.delete(id);
+    setPaints(await db.paints.toArray());
+  }
+  async function saveRecipe(recipe: Recipe) {
+    await db.recipes.put(recipe);
+    setSavedRecipes(await db.recipes.toArray());
+  }
+  function makeRecipes() {
+    if (!targetHex) return;
+    setWorking(true);
+    window.setTimeout(() => {
+      setRecipes(
+        findRecipes(
+          targetHex,
+          mode === "mine" ? paints.filter((paint) => paint.available) : catalog,
+        ),
+      );
+      setWorking(false);
+    }, 20);
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand-mark">O</div>
+        <div className="brand">
+          <strong>OleoPalette</strong>
+          <span>TU TALLER DE COLOR</span>
+        </div>
+        <div className="topbar-accent" aria-hidden="true">
+          ✦
+        </div>
+      </header>
+      <main id="main-content" className="content">
+        {section === "home" && (
+          <section className="home">
+            <div className="eyebrow">EL COLOR EMPIEZA AQUÍ</div>
+            <h1>
+              Tu próximo color,
+              <br />
+              <em>mezclado por ti.</em>
+            </h1>
+            <p className="intro">
+              Elige un tono de tu foto y descubre cómo acercarte a él con las
+              pinturas que tienes.
+            </p>
+            <button
+              className="primary-action"
+              onClick={() => setSection("mix")}
+            >
+              Crear una mezcla <span aria-hidden="true">→</span>
+            </button>
+            <div className="hero-card" aria-hidden="true">
+              <div className="paint-stroke stroke-1" />
+              <div className="paint-stroke stroke-2" />
+              <div className="paint-stroke stroke-3" />
+              <div className="palette-circle">
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+            </div>
+            <div className="section-heading">
+              <span>ASÍ DE SIMPLE</span>
+              <h2>De la inspiración al lienzo</h2>
+            </div>
+            <div className="steps">
+              <article>
+                <b>01</b>
+                <h3>Encuentra el color</h3>
+                <p>Elige una foto y toca el tono que te inspira.</p>
+              </article>
+              <article>
+                <b>02</b>
+                <h3>Explora mezclas</h3>
+                <p>Busca con tus pinturas o una paleta sugerida.</p>
+              </article>
+              <article>
+                <b>03</b>
+                <h3>Pinta a tu manera</h3>
+                <p>Prepara una pequeña muestra y ajusta a ojo.</p>
+              </article>
+            </div>
+          </section>
+        )}
+        {section === "mix" && (
+          <section className="page">
+            <div className="eyebrow">CREAR MEZCLA</div>
+            <h1>Encuentra tu color</h1>
+            <p className="intro">
+              Sube una foto y toca el color que quieres pintar.
+            </p>
+            <PhotoPicker
+              onPick={(hex) => {
+                setTargetHex(hex);
+                setRecipes([]);
+              }}
+            />
+            {targetHex && (
+              <div className="surface target-summary">
+                <div
+                  className="swatch large"
+                  style={{ background: targetHex }}
+                />
+                <div>
+                  <small>COLOR SELECCIONADO</small>
+                  <strong>{targetHex.toUpperCase()}</strong>
+                  <p>Color aparente de la fotografía</p>
+                </div>
+              </div>
+            )}
+            <p className="hint">
+              La luz, la cámara y la pantalla pueden alterar el color. La mezcla
+              final requiere una prueba real.
+            </p>
+            {targetHex && (
+              <div className="surface choice">
+                <h2>¿Qué pinturas quieres usar?</h2>
+                <label>
+                  <input
+                    type="radio"
+                    name="mode"
+                    checked={mode === "mine"}
+                    onChange={() => setMode("mine")}
+                  />{" "}
+                  Con mis pinturas (
+                  {paints.filter((paint) => paint.available).length}{" "}
+                  disponibles)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="mode"
+                    checked={mode === "reference"}
+                    onChange={() => setMode("reference")}
+                  />{" "}
+                  Paleta de referencia
+                </label>
+                <p className="hint">
+                  Los colores del catálogo son muestras digitales ilustrativas,
+                  no mediciones de tubos reales.
+                </p>
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={makeRecipes}
+                  disabled={
+                    working ||
+                    (mode === "mine" &&
+                      !paints.some((paint) => paint.available))
+                  }
+                >
+                  {working ? "Buscando…" : "Buscar cómo prepararlo"}
+                </button>
+                {mode === "mine" &&
+                  !paints.some((paint) => paint.available) && (
+                    <p className="hint">
+                      Primero agrega una pintura disponible en Mis pinturas, o
+                      utiliza la paleta de referencia.
+                    </p>
+                  )}
+              </div>
+            )}
+            {recipes.length > 0 && (
+              <div className="results">
+                <div className="section-heading">
+                  <span>RESULTADOS ORIENTATIVOS</span>
+                  <h2>Prueba estas mezclas</h2>
+                </div>
+                {mode === "mine" && recipes[0].deltaE > 10 && (
+                  <p className="error">
+                    Con tus pinturas, la mejor alternativa digital todavía
+                    difiere bastante del objetivo. Compárala en una muestra
+                    real. Un color cercano para explorar sería{" "}
+                    {catalog
+                      .filter(
+                        (reference) =>
+                          !paints.some(
+                            (paint) =>
+                              paint.name.toLocaleLowerCase() ===
+                              reference.name.toLocaleLowerCase(),
+                          ),
+                      )
+                      .sort(
+                        (a, b) =>
+                          colorDistance(targetHex!, a.hex) -
+                          colorDistance(targetHex!, b.hex),
+                      )[0]?.name || "otra pintura de un tono cercano"}
+                    ; no hay garantía de que un tubo de ese nombre se mezcle
+                    igual.
+                  </p>
+                )}
+                {recipes.map((recipe, index) => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    title={
+                      index === 0
+                        ? "Mejor alternativa estimada"
+                        : `Alternativa ${index + 1}`
+                    }
+                    onSave={saveRecipe}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        {section === "paints" && (
+          <section className="page">
+            <div className="eyebrow">MIS PINTURAS</div>
+            <h1>Tu caja de color</h1>
+            <p className="intro">
+              Registra tus tubos para crear mezclas con lo que realmente tienes.
+            </p>
+            {storageError && (
+              <p role="alert" className="error">
+                {storageError}
+              </p>
+            )}
+            <PaintInventory
+              paints={paints}
+              onSave={savePaint}
+              onDelete={deletePaint}
+            />
+          </section>
+        )}
+        {section === "recipes" && (
+          <section className="page">
+            <div className="eyebrow">MIS RECETAS</div>
+            <h1>Mezclas guardadas</h1>
+            <p className="intro">
+              Vuelve a probar una mezcla o elimínala cuando ya no la necesites.
+            </p>
+            {savedRecipes.length === 0 && (
+              <div className="surface empty">
+                Todavía no guardas recetas. Crea una mezcla para empezar.
+              </div>
+            )}
+            {[...savedRecipes]
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+              .map((recipe) => (
+                <div key={recipe.id}>
+                  <RecipeCard
+                    recipe={recipe}
+                    title={new Date(recipe.createdAt).toLocaleDateString(
+                      "es-CL",
+                    )}
+                  />
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      if (window.confirm("¿Eliminar esta receta?"))
+                        void db.recipes
+                          .delete(recipe.id)
+                          .then(async () =>
+                            setSavedRecipes(await db.recipes.toArray()),
+                          );
+                    }}
+                  >
+                    Eliminar receta
+                  </button>
+                </div>
+              ))}
+          </section>
+        )}
+        {section === "settings" && (
+          <section className="page">
+            <div className="eyebrow">CONFIGURACIÓN</div>
+            <h1>Tu taller, tus datos</h1>
+            <div className="surface">
+              <h2>Privacidad y método</h2>
+              <p>
+                Las fotos se procesan en tu navegador. Tus pinturas se guardan
+                en este dispositivo mediante IndexedDB; pueden perderse si
+                borras los datos del navegador.
+              </p>
+              <p>
+                OleoPalette utiliza una heurística digital, no una simulación
+                física calibrada.{" "}
+                {`Datos de calibración espectral insuficientes`} para un modelo
+                espectral fiable.
+              </p>
+              <p>No se envían tus fotos ni tu inventario a un servidor.</p>
+            </div>
+            <BackupPanel
+              paints={paints}
+              recipes={savedRecipes}
+              onImported={async () => {
+                setPaints(await db.paints.toArray());
+                setSavedRecipes(await db.recipes.toArray());
+              }}
+            />
+          </section>
+        )}
+      </main>
+      <nav className="bottom-nav" aria-label="Navegación principal">
+        {sections.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-current={section === item.id ? "page" : undefined}
+            onClick={() => setSection(item.id)}
+          >
+            <span className="nav-symbol" aria-hidden="true">
+              {item.symbol}
+            </span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
 }

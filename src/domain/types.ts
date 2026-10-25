@@ -12,7 +12,7 @@ export interface Paint {
 }
 
 export interface Ingredient {
-  paint: Pick<Paint, 'id' | 'name' | 'brand' | 'hex' | 'densityGPerMl'>;
+  paint: Pick<Paint, "id" | "name" | "brand" | "hex" | "densityGPerMl">;
   fraction: number;
 }
 
@@ -20,7 +20,7 @@ export interface Recipe {
   id: string;
   targetHex: string;
   estimatedHex: string;
-  model: 'digital-heuristic';
+  model: "digital-heuristic";
   ingredients: Ingredient[];
   deltaE: number;
   createdAt: string;
