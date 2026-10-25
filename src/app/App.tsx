@@ -18,6 +18,17 @@ const sections = [
 
 type Section = (typeof sections)[number]["id"];
 
+export function recipeTitle(mode: "mine" | "reference", index: number): string {
+  if (index === 0) {
+    return mode === "reference"
+      ? "Empieza con colores básicos"
+      : "Empieza con una mezcla sencilla";
+  }
+  return mode === "reference"
+    ? `Opción más específica ${index + 1}`
+    : `Otra mezcla ${index + 1}`;
+}
+
 export function App() {
   const [section, setSection] = useState<Section>("home");
   const [paints, setPaints] = useState<Paint[]>([]);
@@ -287,13 +298,7 @@ export function App() {
                   <RecipeCard
                     key={recipe.id}
                     recipe={recipe}
-                    title={
-                      index === 0
-                        ? mode === "reference"
-                          ? "Empieza con colores básicos"
-                          : "Empieza con una mezcla sencilla"
-                        : `Opción más específica ${index + 1}`
-                    }
+                    title={recipeTitle(mode, index)}
                     onSave={saveRecipe}
                     observations={observations}
                     onObserve={saveObservation}
