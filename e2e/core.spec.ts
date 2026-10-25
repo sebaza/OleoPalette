@@ -52,4 +52,18 @@ test("samples a photo color and proposes a reference recipe", async ({
     .click();
   await page.getByRole("button", { name: "Guardar observación" }).click();
   await expect(page.getByText(/Color observado antes:/).first()).toBeVisible();
+  await page.getByLabel("Con mis pinturas").check();
+  await expect(page.getByText("Mejor alternativa estimada")).toHaveCount(0);
+  await page.getByLabel("Paleta de referencia").check();
+  await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
+  await expect(page.getByText("Mejor alternativa estimada")).toBeVisible();
+  await page
+    .getByLabel("Elegir foto")
+    .setInputFiles({
+      name: "sample-two.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
+    });
+  await expect(page.getByText("COLOR SELECCIONADO")).toHaveCount(0);
+  await expect(page.getByText("Mejor alternativa estimada")).toHaveCount(0);
 });

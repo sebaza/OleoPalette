@@ -3,10 +3,12 @@ import { imagePoint, samplePixels } from "./sampling";
 
 interface Props {
   onPick: (hex: string) => void;
+  onReset?: () => void;
 }
 
-export function PhotoPicker({ onPick }: Props) {
+export function PhotoPicker({ onPick, onReset }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const loadRequest = useRef(0);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -25,6 +27,8 @@ export function PhotoPicker({ onPick }: Props) {
 
   async function load(file?: File) {
     if (!file) return;
+    const request = ++loadRequest.current;
+    onReset?.();
     setError("");
     setReady(false);
     setPoint(null);
@@ -39,6 +43,10 @@ export function PhotoPicker({ onPick }: Props) {
       const bitmap = await createImageBitmap(file, {
         imageOrientation: "from-image",
       });
+      if (loadRequest.current !== request) {
+        bitmap.close();
+        return;
+      }
       const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
       const canvas = canvasRef.current!;
       canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -51,7 +59,8 @@ export function PhotoPicker({ onPick }: Props) {
       setPan({ x: 0, y: 0 });
       setReady(true);
     } catch {
-      setError("No pudimos abrir la foto. Prueba con otra imagen.");
+      if (loadRequest.current === request)
+        setError("No pudimos abrir la foto. Prueba con otra imagen.");
     }
   }
 

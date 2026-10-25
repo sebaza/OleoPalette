@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { catalog } from "../domain/catalog";
 import { colorDistance, findRecipes } from "../domain/mixing";
 import type { MixObservation, Paint, Recipe } from "../domain/types";
@@ -28,6 +28,7 @@ export function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [working, setWorking] = useState(false);
   const [storageError, setStorageError] = useState("");
+  const recipeRequest = useRef(0);
 
   useEffect(() => {
     void Promise.all([
@@ -60,10 +61,17 @@ export function App() {
     await db.observations.put(observation);
     setObservations(await db.observations.toArray());
   }
+  function invalidateRecipes() {
+    recipeRequest.current += 1;
+    setRecipes([]);
+    setWorking(false);
+  }
   function makeRecipes() {
     if (!targetHex) return;
+    const request = ++recipeRequest.current;
     setWorking(true);
     window.setTimeout(() => {
+      if (recipeRequest.current !== request) return;
       setRecipes(
         findRecipes(
           targetHex,
@@ -147,9 +155,13 @@ export function App() {
               Sube una foto y toca el color que quieres pintar.
             </p>
             <PhotoPicker
+              onReset={() => {
+                setTargetHex(null);
+                invalidateRecipes();
+              }}
               onPick={(hex) => {
+                invalidateRecipes();
                 setTargetHex(hex);
-                setRecipes([]);
               }}
             />
             {targetHex && (
@@ -177,7 +189,10 @@ export function App() {
                     type="radio"
                     name="mode"
                     checked={mode === "mine"}
-                    onChange={() => setMode("mine")}
+                    onChange={() => {
+                      setMode("mine");
+                      invalidateRecipes();
+                    }}
                   />{" "}
                   Con mis pinturas (
                   {paints.filter((paint) => paint.available).length}{" "}
@@ -188,7 +203,10 @@ export function App() {
                     type="radio"
                     name="mode"
                     checked={mode === "reference"}
-                    onChange={() => setMode("reference")}
+                    onChange={() => {
+                      setMode("reference");
+                      invalidateRecipes();
+                    }}
                   />{" "}
                   Paleta de referencia
                 </label>
