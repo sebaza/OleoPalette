@@ -62,23 +62,7 @@ interface Candidate {
   score: number;
 }
 
-export function findRecipes(targetHex: string, paints: Paint[]): Recipe[] {
-  new Color(targetHex);
-  const unique = [
-    ...new Map(
-      paints
-        .filter((paint) => paint.available)
-        .map((paint) => [paint.id, paint]),
-    ).values(),
-  ];
-  if (!unique.length) return [];
-  const pool = unique
-    .map((paint) => ({ paint, distance: colorDistance(targetHex, paint.hex) }))
-    .sort(
-      (a, b) => a.distance - b.distance || a.paint.id.localeCompare(b.paint.id),
-    )
-    .slice(0, 12)
-    .map((item) => item.paint);
+function candidatesFor(targetHex: string, pool: Paint[]): Candidate[] {
   const candidates: Candidate[] = [];
   const add = (selected: Paint[], weights: number[]) => {
     const estimatedHex = estimateMix(selected, weights);
@@ -114,17 +98,68 @@ export function findRecipes(targetHex: string, paints: Paint[]): Recipe[] {
       }
     }
   }
-  candidates.sort(
-    (a, b) => a.score - b.score || a.estimatedHex.localeCompare(b.estimatedHex),
+  return candidates.sort(
+    (a, b) =>
+      a.score - b.score ||
+      a.ingredients
+        .map(({ paint }) => paint.id)
+        .join()
+        .localeCompare(b.ingredients.map(({ paint }) => paint.id).join()),
   );
-  const distinct = candidates
-    .filter(
-      (candidate, index, all) =>
-        all.findIndex(
-          (other) => other.estimatedHex === candidate.estimatedHex,
-        ) === index,
+}
+
+function compositionKey(candidate: Candidate): string {
+  return candidate.ingredients
+    .map(({ paint }) => paint.id)
+    .sort()
+    .join("|");
+}
+
+export function findRecipes(
+  targetHex: string,
+  paints: Paint[],
+  options: { basicPaintIds?: string[] } = {},
+): Recipe[] {
+  new Color(targetHex);
+  const unique = [
+    ...new Map(
+      paints
+        .filter((paint) => paint.available)
+        .map((paint) => [paint.id, paint]),
+    ).values(),
+  ];
+  if (!unique.length) return [];
+  const basicIds = new Set(options.basicPaintIds ?? []);
+  const basicPool = unique.filter((paint) => basicIds.has(paint.id));
+  const pool = unique
+    .map((paint) => ({ paint, distance: colorDistance(targetHex, paint.hex) }))
+    .sort(
+      (a, b) => a.distance - b.distance || a.paint.id.localeCompare(b.paint.id),
     )
-    .slice(0, 3);
+    .slice(0, 12)
+    .map((item) => item.paint);
+  // Basic paints must be searched independently; a target-distance prefilter can omit them.
+  const basics = basicPool.length ? candidatesFor(targetHex, basicPool) : [];
+  const expanded = candidatesFor(targetHex, pool).filter(
+    (candidate) =>
+      !basicPool.length ||
+      candidate.ingredients.some(({ paint }) => !basicIds.has(paint.id)),
+  );
+  const distinct: Candidate[] = [];
+  const first = basics[0] ?? expanded[0];
+  if (first) distinct.push(first);
+  for (const candidate of expanded) {
+    if (distinct.length >= 4) break;
+    if (
+      distinct.some(
+        (other) =>
+          compositionKey(other) === compositionKey(candidate) ||
+          colorDistance(other.estimatedHex, candidate.estimatedHex) < 2,
+      )
+    )
+      continue;
+    distinct.push(candidate);
+  }
   return distinct.map((candidate, index) => ({
     id: `proposal-${index}`,
     targetHex,

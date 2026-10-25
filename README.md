@@ -15,7 +15,7 @@ Open the Vite URL under `/OleoPalette/`. Run `npm test -- --run`, `npm run typec
 
 1. Add representative digital colors for the paints you own under **Mis pinturas**.
 2. In **Crear mezcla**, choose or capture a photo and tap a color. Images stay in memory and are downscaled to at most 2048 pixels on the longest side; they are not uploaded or saved.
-3. Choose available paints only or a broad reference palette. Inspect estimated alternatives, adjust proportions and volume, then save a recipe snapshot. A real mix can be photographed and recorded as a separate observation; only the same pigment combination and proportions will show that previous observation later.
+3. Choose available paints only or the illustrative reference palette. The first recipe favors a simple mix (in reference mode, red/primary yellow/blue with white or black when useful); later cards show distinct alternatives with more specialized colors. Compare percentages and relative parts first, then expand **Ajustar y medir cantidades** for volume estimates and sliders. These are digital estimates, not verified physical paint mixtures. Save a recipe snapshot if useful. A real mix can be photographed and recorded as a separate observation; only the same pigment combination and proportions will show that previous observation later.
 4. Export a local JSON backup under **Configuración**. Importing can combine by identifier or replace after confirmation. Backups include paints, recipes and observations but exclude photos. Version 1 backups migrate to version 2.
 
 Data is stored in this browser's IndexedDB and can be lost if site data is cleared. No account, backend, analytics, or third-party font request is used.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { estimateMix, findRecipes, spectralAvailability } from "./mixing";
+import { basicCatalog, catalog } from "./catalog";
 import type { Paint } from "./types";
 
 const paint = (id: string, hex: string): Paint => ({
@@ -43,5 +44,68 @@ describe("digital mixing estimate", () => {
       available: false,
       reason: "Datos de calibración espectral insuficientes",
     });
+  });
+
+  it("starts reference results with basic red, primary yellow, blue, white and black", () => {
+    expect(basicCatalog.map(({ id }) => id)).toEqual([
+      "reference-red",
+      "reference-primary-yellow",
+      "reference-blue",
+      "reference-white",
+      "reference-black",
+    ]);
+    const recipes = findRecipes("#228070", catalog, {
+      basicPaintIds: basicCatalog.map(({ id }) => id),
+    });
+    expect(recipes.length).toBeGreaterThan(1);
+    expect(
+      recipes[0].ingredients.every(({ paint }) =>
+        basicCatalog.some(({ id }) => id === paint.id),
+      ),
+    ).toBe(true);
+    expect(
+      recipes
+        .slice(1)
+        .some((recipe) =>
+          recipe.ingredients.some(
+            ({ paint }) => !basicCatalog.some(({ id }) => id === paint.id),
+          ),
+        ),
+    ).toBe(true);
+    expect(
+      recipes[0].ingredients.reduce((sum, item) => sum + item.fraction, 0),
+    ).toBeCloseTo(1);
+    expect(recipes).toEqual(
+      findRecipes("#228070", catalog, {
+        basicPaintIds: basicCatalog.map(({ id }) => id),
+      }),
+    );
+  });
+
+  it("uses only available personal paints and returns distinct compositions", () => {
+    const paints = [
+      paint("a", "#cc3322"),
+      paint("b", "#254677"),
+      paint("c", "#e9e8da"),
+      paint("d", "#236f61"),
+      { ...paint("absent", "#368076"), available: false },
+    ];
+    const recipes = findRecipes("#398076", paints);
+    expect(recipes[0].ingredients.length).toBeLessThanOrEqual(3);
+    for (const recipe of recipes) {
+      expect(
+        recipe.ingredients.every(({ paint }) => paint.id !== "absent"),
+      ).toBe(true);
+      expect(
+        recipe.ingredients.reduce((sum, item) => sum + item.fraction, 0),
+      ).toBeCloseTo(1);
+    }
+    expect(
+      new Set(
+        recipes.map((recipe) =>
+          recipe.ingredients.map(({ paint }) => paint.id).join(","),
+        ),
+      ).size,
+    ).toBe(recipes.length);
   });
 });

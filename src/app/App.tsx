@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { catalog } from "../domain/catalog";
+import { basicCatalog, catalog } from "../domain/catalog";
 import { colorDistance, findRecipes } from "../domain/mixing";
 import type { MixObservation, Paint, Recipe } from "../domain/types";
 import { PhotoPicker } from "../features/image-selection/PhotoPicker";
@@ -76,6 +76,9 @@ export function App() {
         findRecipes(
           targetHex,
           mode === "mine" ? paints.filter((paint) => paint.available) : catalog,
+          mode === "reference"
+            ? { basicPaintIds: basicCatalog.map(({ id }) => id) }
+            : {},
         ),
       );
       setWorking(false);
@@ -241,37 +244,55 @@ export function App() {
                   <span>RESULTADOS ORIENTATIVOS</span>
                   <h2>Prueba estas mezclas</h2>
                 </div>
-                {mode === "mine" && recipes[0].deltaE > 10 && (
-                  <p className="error">
-                    Con tus pinturas, la mejor alternativa digital todavía
-                    difiere bastante del objetivo. Compárala en una muestra
-                    real. Un color cercano para explorar sería{" "}
-                    {catalog
-                      .filter(
-                        (reference) =>
-                          !paints.some(
-                            (paint) =>
-                              paint.name.toLocaleLowerCase() ===
-                              reference.name.toLocaleLowerCase(),
-                          ),
-                      )
-                      .sort(
-                        (a, b) =>
-                          colorDistance(targetHex!, a.hex) -
-                          colorDistance(targetHex!, b.hex),
-                      )[0]?.name || "otra pintura de un tono cercano"}
-                    ; no hay garantía de que un tubo de ese nombre se mezcle
-                    igual.
-                  </p>
-                )}
+                <p className="hint">
+                  {mode === "reference"
+                    ? "Primero, una mezcla de la paleta básica: rojo, amarillo primario, azul, blanco y negro. Después, opciones con pigmentos más específicos. El parecido digital no garantiza el resultado físico."
+                    : "Primero una mezcla sencilla con tus pinturas disponibles; después, alternativas distintas. No se deducen pigmentos por el nombre del tubo."}
+                </p>
+                {mode === "reference" &&
+                  recipes
+                    .slice(1)
+                    .some((recipe) => recipe.deltaE < recipes[0].deltaE) && (
+                    <p className="hint">
+                      La primera opción prioriza pinturas básicas; alguna
+                      alternativa puede acercarse más al color de la foto en la
+                      estimación digital.
+                    </p>
+                  )}
+                {mode === "mine" &&
+                  Math.min(...recipes.map((recipe) => recipe.deltaE)) > 10 && (
+                    <p className="error">
+                      Con tus pinturas, la mejor alternativa digital todavía
+                      difiere bastante del objetivo. Compárala en una muestra
+                      real. Un color cercano para explorar sería{" "}
+                      {catalog
+                        .filter(
+                          (reference) =>
+                            !paints.some(
+                              (paint) =>
+                                paint.name.toLocaleLowerCase() ===
+                                reference.name.toLocaleLowerCase(),
+                            ),
+                        )
+                        .sort(
+                          (a, b) =>
+                            colorDistance(targetHex!, a.hex) -
+                            colorDistance(targetHex!, b.hex),
+                        )[0]?.name || "otra pintura de un tono cercano"}
+                      ; no hay garantía de que un tubo de ese nombre se mezcle
+                      igual.
+                    </p>
+                  )}
                 {recipes.map((recipe, index) => (
                   <RecipeCard
                     key={recipe.id}
                     recipe={recipe}
                     title={
                       index === 0
-                        ? "Mejor alternativa estimada"
-                        : `Alternativa ${index + 1}`
+                        ? mode === "reference"
+                          ? "Empieza con colores básicos"
+                          : "Empieza con una mezcla sencilla"
+                        : `Opción más específica ${index + 1}`
                     }
                     onSave={saveRecipe}
                     observations={observations}

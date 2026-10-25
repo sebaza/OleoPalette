@@ -5,6 +5,7 @@ const entries = [
   ["white", "Blanco de titanio", "#eee9d8"],
   ["black", "Negro marfil", "#292c29"],
   ["yellow", "Amarillo ocre", "#c29a43"],
+  ["primary-yellow", "Amarillo primario", "#efd22f"],
   ["red", "Rojo cadmio", "#bc4f38"],
   ["blue", "Azul ultramar", "#354d8a"],
   ["green", "Verde ftalo", "#20685f"],
@@ -20,3 +21,8 @@ export const catalog: Paint[] = entries.map(([id, name, hex]) => ({
   createdAt: "",
   updatedAt: "",
 }));
+
+const basicIds = ["red", "primary-yellow", "blue", "white", "black"];
+export const basicCatalog = basicIds.map((id) =>
+  catalog.find((paint) => paint.id === `reference-${id}`)!,
+);

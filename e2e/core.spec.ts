@@ -45,7 +45,26 @@ test("samples a photo color and proposes a reference recipe", async ({
   await expect(page.getByText("#B05040")).toBeVisible();
   await page.getByLabel("Paleta de referencia").check();
   await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
-  await expect(page.getByText("Mejor alternativa estimada")).toBeVisible();
+  const firstRecipe = page.locator(".recipe-card").first();
+  await expect(
+    firstRecipe.getByRole("heading", { name: "Empieza con colores básicos" }),
+  ).toBeVisible();
+  await expect(
+    firstRecipe.locator(".recipe-ingredients strong").first(),
+  ).toContainText("%");
+  await expect(firstRecipe.getByText(/parte relativa/).first()).toBeVisible();
+  await expect(firstRecipe.locator(".recipe-details")).not.toHaveAttribute(
+    "open",
+  );
+  expect(
+    await firstRecipe.locator(".recipe-ingredients li").allTextContents(),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(
+        /(Rojo cadmio|Amarillo primario|Azul ultramar|Blanco de titanio|Negro marfil)/,
+      ),
+    ]),
+  );
   await page
     .getByRole("button", { name: "Registrar resultado real" })
     .first()
@@ -53,17 +72,15 @@ test("samples a photo color and proposes a reference recipe", async ({
   await page.getByRole("button", { name: "Guardar observación" }).click();
   await expect(page.getByText(/Color observado antes:/).first()).toBeVisible();
   await page.getByLabel("Con mis pinturas").check();
-  await expect(page.getByText("Mejor alternativa estimada")).toHaveCount(0);
+  await expect(page.getByText("Empieza con colores básicos")).toHaveCount(0);
   await page.getByLabel("Paleta de referencia").check();
   await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
-  await expect(page.getByText("Mejor alternativa estimada")).toBeVisible();
-  await page
-    .getByLabel("Elegir foto")
-    .setInputFiles({
-      name: "sample-two.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
-    });
+  await expect(page.getByText("Empieza con colores básicos")).toBeVisible();
+  await page.getByLabel("Elegir foto").setInputFiles({
+    name: "sample-two.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
+  });
   await expect(page.getByText("COLOR SELECCIONADO")).toHaveCount(0);
-  await expect(page.getByText("Mejor alternativa estimada")).toHaveCount(0);
+  await expect(page.getByText("Empieza con colores básicos")).toHaveCount(0);
 });
