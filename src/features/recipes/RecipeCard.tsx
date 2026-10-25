@@ -1,15 +1,25 @@
 import { useState } from "react";
 import { colorDistance, estimateMix } from "../../domain/mixing";
+import { matchingObservation } from "../../domain/calibration";
 import { ingredientQuantity, rebalance } from "../../domain/quantities";
-import type { Recipe } from "../../domain/types";
+import type { MixObservation, Recipe } from "../../domain/types";
+import { ObservationPanel } from "../calibration/ObservationPanel";
 
 interface Props {
   recipe: Recipe;
   title: string;
   onSave?: (recipe: Recipe) => Promise<void>;
+  observations?: MixObservation[];
+  onObserve?: (observation: MixObservation) => Promise<void>;
 }
 
-export function RecipeCard({ recipe, title, onSave }: Props) {
+export function RecipeCard({
+  recipe,
+  title,
+  onSave,
+  observations = [],
+  onObserve,
+}: Props) {
   const original = recipe.ingredients.map((ingredient) => ingredient.fraction);
   const [fractions, setFractions] = useState(original);
   const [amount, setAmount] = useState(20);
@@ -20,20 +30,25 @@ export function RecipeCard({ recipe, title, onSave }: Props) {
     fractions,
   );
   const difference = colorDistance(recipe.targetHex, estimatedHex);
+  const currentRecipe: Recipe = {
+    ...recipe,
+    estimatedHex,
+    deltaE: difference,
+    ingredients: recipe.ingredients.map((ingredient, index) => ({
+      ...ingredient,
+      fraction: fractions[index],
+    })),
+  };
+  const priorObservation = matchingObservation(currentRecipe, observations);
+  const smallestFraction = Math.min(...fractions);
 
   async function save() {
     if (!onSave) return;
     setError("");
     try {
       await onSave({
-        ...recipe,
+        ...currentRecipe,
         id: crypto.randomUUID(),
-        estimatedHex,
-        deltaE: difference,
-        ingredients: recipe.ingredients.map((ingredient, index) => ({
-          ...ingredient,
-          fraction: fractions[index],
-        })),
         createdAt: new Date().toISOString(),
       });
       setSaved(true);
@@ -58,6 +73,23 @@ export function RecipeCard({ recipe, title, onSave }: Props) {
           <span>Estimado · {estimatedHex}</span>
         </div>
       </div>
+      {priorObservation && (
+        <div className="prior-observation">
+          <div
+            className="swatch"
+            style={{ background: priorObservation.observedHex }}
+          />
+          <div>
+            <strong>
+              Color observado antes: {priorObservation.observedHex}
+            </strong>
+            <p className="hint">
+              Mismos pigmentos y proporciones aproximadas. Fotografía previa, no
+              predicción del modelo; la iluminación puede cambiar el resultado.
+            </p>
+          </div>
+        </div>
+      )}
       <p className="hint">
         Diferencia digital estimada ΔE00: {difference.toFixed(1)}. No predice
         con certeza el color físico del óleo.
@@ -114,7 +146,9 @@ export function RecipeCard({ recipe, title, onSave }: Props) {
                 />
               )}
               <small>
-                {quantity.ml} mL aprox. · {quantity.tsp} cucharaditas medidoras
+                {Math.round((fractions[index] / smallestFraction) * 10) / 10}{" "}
+                partes relativas · {quantity.ml} mL aprox. · {quantity.tsp}{" "}
+                cucharaditas o {quantity.tbsp} cucharadas medidoras
                 {quantity.grams !== null
                   ? ` · ${quantity.grams} g estimados`
                   : ""}
@@ -155,6 +189,9 @@ export function RecipeCard({ recipe, title, onSave }: Props) {
         <p role="alert" className="error">
           {error}
         </p>
+      )}
+      {onObserve && (
+        <ObservationPanel recipe={currentRecipe} onSave={onObserve} />
       )}
     </article>
   );

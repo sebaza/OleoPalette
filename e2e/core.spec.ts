@@ -34,13 +34,11 @@ test("samples a photo color and proposes a reference recipe", async ({
     context.fillRect(0, 0, 10, 10);
     return canvas.toDataURL("image/png");
   });
-  await page
-    .getByLabel("Elegir foto")
-    .setInputFiles({
-      name: "sample.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
-    });
+  await page.getByLabel("Elegir foto").setInputFiles({
+    name: "sample.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
+  });
   const canvas = page.getByRole("button", { name: /Fotografía; toca/ });
   await expect(canvas).toBeVisible();
   await canvas.click({ position: { x: 5, y: 5 } });
@@ -48,4 +46,10 @@ test("samples a photo color and proposes a reference recipe", async ({
   await page.getByLabel("Paleta de referencia").check();
   await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
   await expect(page.getByText("Mejor alternativa estimada")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Registrar resultado real" })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Guardar observación" }).click();
+  await expect(page.getByText(/Color observado antes:/).first()).toBeVisible();
 });

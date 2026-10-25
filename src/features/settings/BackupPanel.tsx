@@ -1,22 +1,28 @@
 import { useState } from "react";
 import { db } from "../../storage/db";
 import { makeBackup, parseBackup, type Backup } from "../../storage/backup";
-import type { Paint, Recipe } from "../../domain/types";
+import type { MixObservation, Paint, Recipe } from "../../domain/types";
 
 interface Props {
   paints: Paint[];
   recipes: Recipe[];
+  observations: MixObservation[];
   onImported: () => Promise<void>;
 }
 
-export function BackupPanel({ paints, recipes, onImported }: Props) {
+export function BackupPanel({
+  paints,
+  recipes,
+  observations,
+  onImported,
+}: Props) {
   const [incoming, setIncoming] = useState<Backup | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   function download() {
     const blob = new Blob(
-      [JSON.stringify(makeBackup(paints, recipes), null, 2)],
+      [JSON.stringify(makeBackup(paints, recipes, observations), null, 2)],
       { type: "application/json" },
     );
     const url = URL.createObjectURL(blob);
@@ -53,31 +59,48 @@ export function BackupPanel({ paints, recipes, onImported }: Props) {
     if (
       replace &&
       !window.confirm(
-        "Esto reemplazará tus pinturas y recetas actuales. ¿Continuar?",
+        "Esto reemplazará tus pinturas, recetas y observaciones actuales. ¿Continuar?",
       )
     )
       return;
     setError("");
     try {
       const source = incoming;
-      await db.transaction("rw", db.paints, db.recipes, async () => {
-        if (replace) {
-          await db.paints.clear();
-          await db.recipes.clear();
-        }
-        const paintIds = new Set(
-          (await db.paints.toArray()).map((paint) => paint.id),
-        );
-        const recipeIds = new Set(
-          (await db.recipes.toArray()).map((recipe) => recipe.id),
-        );
-        await db.paints.bulkAdd(
-          source.paints.filter((paint) => !paintIds.has(paint.id)),
-        );
-        await db.recipes.bulkAdd(
-          source.recipes.filter((recipe) => !recipeIds.has(recipe.id)),
-        );
-      });
+      await db.transaction(
+        "rw",
+        db.paints,
+        db.recipes,
+        db.observations,
+        async () => {
+          if (replace) {
+            await db.paints.clear();
+            await db.recipes.clear();
+            await db.observations.clear();
+          }
+          const paintIds = new Set(
+            (await db.paints.toArray()).map((paint) => paint.id),
+          );
+          const recipeIds = new Set(
+            (await db.recipes.toArray()).map((recipe) => recipe.id),
+          );
+          const observationIds = new Set(
+            (await db.observations.toArray()).map(
+              (observation) => observation.id,
+            ),
+          );
+          await db.paints.bulkAdd(
+            source.paints.filter((paint) => !paintIds.has(paint.id)),
+          );
+          await db.recipes.bulkAdd(
+            source.recipes.filter((recipe) => !recipeIds.has(recipe.id)),
+          );
+          await db.observations.bulkAdd(
+            source.observations.filter(
+              (observation) => !observationIds.has(observation.id),
+            ),
+          );
+        },
+      );
       await onImported();
       setIncoming(null);
       setMessage("Respaldo importado correctamente.");
@@ -92,8 +115,9 @@ export function BackupPanel({ paints, recipes, onImported }: Props) {
     <div className="surface backup-panel">
       <h2>Respaldo local</h2>
       <p>
-        Guarda un archivo JSON para no perder tus pinturas y recetas si borras
-        los datos del navegador. Las fotos no se incluyen.
+        Guarda un archivo JSON para no perder tus pinturas, recetas y
+        observaciones si borras los datos del navegador. Las fotos no se
+        incluyen.
       </p>
       <button type="button" className="primary-action" onClick={download}>
         Descargar respaldo
@@ -110,8 +134,8 @@ export function BackupPanel({ paints, recipes, onImported }: Props) {
         <div className="backup-preview">
           <h3>Vista previa</h3>
           <p>
-            {incoming.paints.length} pinturas y {incoming.recipes.length}{" "}
-            recetas.
+            {incoming.paints.length} pinturas, {incoming.recipes.length} recetas
+            y {incoming.observations.length} observaciones.
           </p>
           <div className="recipe-actions">
             <button

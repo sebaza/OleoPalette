@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { catalog } from "../domain/catalog";
 import { colorDistance, findRecipes } from "../domain/mixing";
-import type { Paint, Recipe } from "../domain/types";
+import type { MixObservation, Paint, Recipe } from "../domain/types";
 import { PhotoPicker } from "../features/image-selection/PhotoPicker";
 import { PaintInventory } from "../features/paint-inventory/PaintInventory";
 import { RecipeCard } from "../features/recipes/RecipeCard";
@@ -22,6 +22,7 @@ export function App() {
   const [section, setSection] = useState<Section>("home");
   const [paints, setPaints] = useState<Paint[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [observations, setObservations] = useState<MixObservation[]>([]);
   const [targetHex, setTargetHex] = useState<string | null>(null);
   const [mode, setMode] = useState<"mine" | "reference">("mine");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -29,10 +30,15 @@ export function App() {
   const [storageError, setStorageError] = useState("");
 
   useEffect(() => {
-    void Promise.all([db.paints.toArray(), db.recipes.toArray()])
-      .then(([storedPaints, storedRecipes]) => {
+    void Promise.all([
+      db.paints.toArray(),
+      db.recipes.toArray(),
+      db.observations.toArray(),
+    ])
+      .then(([storedPaints, storedRecipes, storedObservations]) => {
         setPaints(storedPaints);
         setSavedRecipes(storedRecipes);
+        setObservations(storedObservations);
       })
       .catch(() =>
         setStorageError("No se pudo abrir el almacenamiento local."),
@@ -49,6 +55,10 @@ export function App() {
   async function saveRecipe(recipe: Recipe) {
     await db.recipes.put(recipe);
     setSavedRecipes(await db.recipes.toArray());
+  }
+  async function saveObservation(observation: MixObservation) {
+    await db.observations.put(observation);
+    setObservations(await db.observations.toArray());
   }
   function makeRecipes() {
     if (!targetHex) return;
@@ -246,6 +256,8 @@ export function App() {
                         : `Alternativa ${index + 1}`
                     }
                     onSave={saveRecipe}
+                    observations={observations}
+                    onObserve={saveObservation}
                   />
                 ))}
               </div>
@@ -289,6 +301,8 @@ export function App() {
                 <div key={recipe.id}>
                   <RecipeCard
                     recipe={recipe}
+                    observations={observations}
+                    onObserve={saveObservation}
                     title={new Date(recipe.createdAt).toLocaleDateString(
                       "es-CL",
                     )}
@@ -317,9 +331,9 @@ export function App() {
             <div className="surface">
               <h2>Privacidad y método</h2>
               <p>
-                Las fotos se procesan en tu navegador. Tus pinturas se guardan
-                en este dispositivo mediante IndexedDB; pueden perderse si
-                borras los datos del navegador.
+                Las fotos se procesan en tu navegador. Tus pinturas, recetas y
+                observaciones se guardan en este dispositivo mediante IndexedDB;
+                pueden perderse si borras los datos del navegador.
               </p>
               <p>
                 OleoPalette utiliza una heurística digital, no una simulación
@@ -332,11 +346,38 @@ export function App() {
             <BackupPanel
               paints={paints}
               recipes={savedRecipes}
+              observations={observations}
               onImported={async () => {
                 setPaints(await db.paints.toArray());
                 setSavedRecipes(await db.recipes.toArray());
+                setObservations(await db.observations.toArray());
               }}
             />
+            <div className="surface">
+              <h2>Observaciones de mezclas</h2>
+              <p>
+                {observations.length} observaciones guardadas. Solo se muestran
+                como referencia para una mezcla con los mismos pigmentos y
+                proporciones; no se extrapolan a otras pinturas.
+              </p>
+              {observations.length > 0 && (
+                <button
+                  className="danger-button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "¿Eliminar todas las observaciones de mezclas?",
+                      )
+                    )
+                      void db.observations
+                        .clear()
+                        .then(() => setObservations([]));
+                  }}
+                >
+                  Eliminar observaciones
+                </button>
+              )}
+            </div>
           </section>
         )}
       </main>

@@ -25,3 +25,13 @@ export interface Recipe {
   deltaE: number;
   createdAt: string;
 }
+
+export interface MixObservation {
+  id: string;
+  recipe: Recipe;
+  observedHex: string;
+  lighting?: string;
+  paintState?: "wet" | "dry" | "unknown";
+  notes?: string;
+  createdAt: string;
+}

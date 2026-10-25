@@ -677,3 +677,44 @@ textarea:focus-visible {
   padding: 12px;
   min-height: 48px;
 }
+.prior-observation {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f2eee4;
+}
+.prior-observation p {
+  margin: 3px 0 0;
+}
+.observation-panel {
+  border-top: 1px solid #eae1d4;
+  margin-top: 20px;
+  padding-top: 12px;
+}
+.observation-panel form > label {
+  display: block;
+  margin: 16px 0;
+  font-weight: 600;
+}
+.observation-panel form > label input:not([type="color"]),
+.observation-panel select,
+.observation-panel textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 7px;
+  padding: 8px;
+  border: 1px solid #cfc3b0;
+  border-radius: 8px;
+}
+.observation-panel textarea {
+  min-height: 80px;
+}
+.observation-panel input[type="color"] {
+  display: block;
+  width: 76px;
+  height: 52px;
+}
