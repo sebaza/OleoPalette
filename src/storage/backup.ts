@@ -12,6 +12,11 @@ const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
+const optionalText = (value: unknown): boolean =>
+  value === undefined || typeof value === "string";
+const optionalDensity = (value: unknown): boolean =>
+  value === undefined ||
+  (typeof value === "number" && Number.isFinite(value) && value > 0);
 
 function validPaint(value: unknown): value is Paint {
   return (
@@ -23,10 +28,10 @@ function validPaint(value: unknown): value is Paint {
     typeof value.available === "boolean" &&
     text(value.createdAt) &&
     text(value.updatedAt) &&
-    (value.densityGPerMl === undefined ||
-      (typeof value.densityGPerMl === "number" &&
-        Number.isFinite(value.densityGPerMl) &&
-        value.densityGPerMl > 0))
+    optionalText(value.brand) &&
+    optionalText(value.pigmentCode) &&
+    optionalText(value.notes) &&
+    optionalDensity(value.densityGPerMl)
   );
 }
 
@@ -57,6 +62,8 @@ function validRecipe(value: unknown): value is Recipe {
       !text(item.paint.name) ||
       !text(item.paint.hex) ||
       !hex.test(item.paint.hex) ||
+      !optionalText(item.paint.brand) ||
+      !optionalDensity(item.paint.densityGPerMl) ||
       typeof item.fraction !== "number" ||
       !Number.isFinite(item.fraction) ||
       item.fraction <= 0 ||

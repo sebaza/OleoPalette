@@ -13,3 +13,18 @@ it("rejects unsupported versions and invalid proportions", () => {
     ),
   ).toThrow();
 });
+
+it("rejects malformed optional fields before React can render them", () => {
+  const paint = {
+    id: "p",
+    name: "Blue",
+    hex: "#123456",
+    available: true,
+    createdAt: "today",
+    updatedAt: "today",
+    brand: { invalid: true },
+  };
+  expect(() =>
+    parseBackup(JSON.stringify({ version: 1, paints: [paint], recipes: [] })),
+  ).toThrow();
+});
