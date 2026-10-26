@@ -84,3 +84,97 @@ test("samples a photo color and proposes a reference recipe", async ({
   await expect(page.getByText("COLOR SELECCIONADO")).toHaveCount(0);
   await expect(page.getByText("Empieza con colores básicos")).toHaveCount(0);
 });
+
+test("fits a portrait photo and separates mobile pan from color selection", async ({
+  page,
+}) => {
+  await page.goto("/OleoPalette/");
+  await page.getByRole("button", { name: "Crear mezcla" }).click();
+  const dataUrl = await page.evaluate(() => {
+    const image = document.createElement("canvas");
+    image.width = 100;
+    image.height = 300;
+    const context = image.getContext("2d")!;
+    context.fillStyle = "#ff0000";
+    context.fillRect(0, 0, 100, 150);
+    context.fillStyle = "#0000ff";
+    context.fillRect(0, 150, 100, 150);
+    return image.toDataURL("image/png");
+  });
+  await page.getByLabel("Elegir foto").setInputFiles({
+    name: "portrait.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
+  });
+  const canvas = page.getByRole("button", { name: /Fotografía; toca/ });
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  const viewport = await page.locator(".photo-viewport").boundingBox();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(viewport!.x - 1);
+  expect(box!.y).toBeGreaterThanOrEqual(viewport!.y - 1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(
+    viewport!.x + viewport!.width + 1,
+  );
+  expect(box!.y + box!.height).toBeLessThanOrEqual(
+    viewport!.y + viewport!.height + 1,
+  );
+  await canvas.click({ position: { x: box!.width / 2, y: 20 } });
+  await expect(page.getByText("#FF0000")).toBeVisible();
+  await page.getByRole("button", { name: "Ampliar foto" }).click();
+  await expect(page.getByText("150 %")).toBeVisible();
+  const enlarged = await canvas.boundingBox();
+  await page.mouse.move(
+    enlarged!.x + enlarged!.width / 2,
+    enlarged!.y + enlarged!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    enlarged!.x + enlarged!.width / 2,
+    enlarged!.y + enlarged!.height / 2 - 80,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  await expect(page.getByText("#FF0000")).toBeVisible();
+  await page.getByRole("button", { name: "Reducir foto" }).click();
+  await expect(page.getByText("100 %")).toBeVisible();
+  await page.getByRole("button", { name: "Restablecer" }).click();
+  await expect(page.getByText("100 %")).toBeVisible();
+  const fittedBox = await canvas.boundingBox();
+  const centerX = fittedBox!.x + fittedBox!.width / 2;
+  const centerY = fittedBox!.y + fittedBox!.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      { x: centerX - 25, y: centerY, id: 1 },
+      { x: centerX + 25, y: centerY, id: 2 },
+    ],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [
+      { x: centerX - 70, y: centerY, id: 1 },
+      { x: centerX + 70, y: centerY, id: 2 },
+    ],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await expect(page.getByText(/^[2-4]\d\d %$/)).toBeVisible();
+  await expect(page.getByText("#FF0000")).toBeVisible();
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.getByRole("button", { name: "Restablecer" }).click();
+  const rotatedBox = await canvas.boundingBox();
+  const rotatedViewport = await page.locator(".photo-viewport").boundingBox();
+  expect(rotatedBox!.x).toBeGreaterThanOrEqual(rotatedViewport!.x - 1);
+  expect(rotatedBox!.y).toBeGreaterThanOrEqual(rotatedViewport!.y - 1);
+  expect(rotatedBox!.x + rotatedBox!.width).toBeLessThanOrEqual(
+    rotatedViewport!.x + rotatedViewport!.width + 1,
+  );
+  expect(rotatedBox!.y + rotatedBox!.height).toBeLessThanOrEqual(
+    rotatedViewport!.y + rotatedViewport!.height + 1,
+  );
+});
