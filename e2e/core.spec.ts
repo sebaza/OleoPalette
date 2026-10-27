@@ -41,8 +41,26 @@ test("samples a photo color and proposes a reference recipe", async ({
   });
   const canvas = page.getByRole("button", { name: /Fotografía; toca/ });
   await expect(canvas).toBeVisible();
+  const beforePick = await canvas.boundingBox();
   await canvas.click({ position: { x: 5, y: 5 } });
   await expect(page.getByText("#B05040")).toBeVisible();
+  expect(await canvas.boundingBox()).toEqual(beforePick);
+  await expect(
+    page.getByRole("status").filter({ hasText: "#B05040" }),
+  ).toBeVisible();
+  const badge = page.locator(".photo-feedback");
+  await expect(badge).toHaveCSS("pointer-events", "none");
+  const badgeBox = await badge.boundingBox();
+  const photoBox = await page.locator(".photo-viewport").boundingBox();
+  expect(badgeBox!.y).toBeGreaterThanOrEqual(photoBox!.y);
+  expect(badgeBox!.y + badgeBox!.height).toBeLessThanOrEqual(
+    photoBox!.y + photoBox!.height,
+  );
+  await expect(badge.locator(".photo-feedback-swatch")).toHaveCSS(
+    "background-color",
+    "rgb(176, 80, 64)",
+  );
+  await expect(page.getByLabel("Paleta de referencia")).toBeChecked();
   await page.getByLabel("Paleta de referencia").check();
   await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
   const firstRecipe = page.locator(".recipe-card").first();
@@ -120,11 +138,35 @@ test("fits a portrait photo and separates mobile pan from color selection", asyn
   expect(box!.y + box!.height).toBeLessThanOrEqual(
     viewport!.y + viewport!.height + 1,
   );
+  const cdp = await page.context().newCDPSession(page);
+  const scrollX = viewport!.x + viewport!.width / 2;
+  const scrollY = viewport!.y + viewport!.height / 2;
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: scrollX, y: scrollY, id: 1 }],
+  });
+  for (const offset of [30, 70, 120, 170]) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: scrollX, y: scrollY - offset, id: 1 }],
+    });
+  }
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(20);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await canvas.click({ position: { x: box!.width / 2, y: 20 } });
   await expect(page.getByText("#FF0000")).toBeVisible();
   await page.getByRole("button", { name: "Ampliar foto" }).click();
   await expect(page.getByText("150 %")).toBeVisible();
   const enlarged = await canvas.boundingBox();
+  const beforePan = await canvas.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
   await page.mouse.move(
     enlarged!.x + enlarged!.width / 2,
     enlarged!.y + enlarged!.height / 2,
@@ -136,6 +178,10 @@ test("fits a portrait photo and separates mobile pan from color selection", asyn
     { steps: 5 },
   );
   await page.mouse.up();
+  const afterPan = await canvas.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
+  expect(afterPan).not.toBe(beforePan);
   await expect(page.getByText("#FF0000")).toBeVisible();
   await page.getByRole("button", { name: "Reducir foto" }).click();
   await expect(page.getByText("100 %")).toBeVisible();
@@ -144,7 +190,6 @@ test("fits a portrait photo and separates mobile pan from color selection", asyn
   const fittedBox = await canvas.boundingBox();
   const centerX = fittedBox!.x + fittedBox!.width / 2;
   const centerY = fittedBox!.y + fittedBox!.height / 2;
-  const cdp = await page.context().newCDPSession(page);
   await cdp.send("Input.dispatchTouchEvent", {
     type: "touchStart",
     touchPoints: [
@@ -165,6 +210,26 @@ test("fits a portrait photo and separates mobile pan from color selection", asyn
   });
   await expect(page.getByText(/^[2-4]\d\d %$/)).toBeVisible();
   await expect(page.getByText("#FF0000")).toBeVisible();
+  const beforeTouchPan = await canvas.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: centerX, y: centerY, id: 3 }],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: centerX, y: centerY - 60, id: 3 }],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  const afterTouchPan = await canvas.evaluate(
+    (element) => getComputedStyle(element).transform,
+  );
+  expect(afterTouchPan).not.toBe(beforeTouchPan);
+  await expect(page.getByText("#FF0000")).toBeVisible();
   await page.setViewportSize({ width: 844, height: 390 });
   await page.getByRole("button", { name: "Restablecer" }).click();
   const rotatedBox = await canvas.boundingBox();
@@ -177,4 +242,40 @@ test("fits a portrait photo and separates mobile pan from color selection", asyn
   expect(rotatedBox!.y + rotatedBox!.height).toBeLessThanOrEqual(
     rotatedViewport!.y + rotatedViewport!.height + 1,
   );
+});
+
+test("keeps an active reference mix consistent after adding a paint elsewhere", async ({
+  page,
+}) => {
+  await page.goto("/OleoPalette/");
+  await page.getByRole("button", { name: "Crear mezcla" }).click();
+  const dataUrl = await page.evaluate(() => {
+    const image = document.createElement("canvas");
+    image.width = 10;
+    image.height = 10;
+    const context = image.getContext("2d")!;
+    context.fillStyle = "#b05040";
+    context.fillRect(0, 0, 10, 10);
+    return image.toDataURL("image/png");
+  });
+  await page.getByLabel("Elegir foto").setInputFiles({
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(dataUrl.split(",")[1], "base64"),
+  });
+  await page.getByRole("button", { name: /Fotografía; toca/ }).click();
+  await expect(page.getByLabel("Paleta de referencia")).toBeChecked();
+  await page.getByRole("button", { name: "Buscar cómo prepararlo" }).click();
+  await expect(page.getByText("Empieza con colores básicos")).toBeVisible();
+  await page.getByRole("button", { name: "Mis pinturas" }).click();
+  await page
+    .getByRole("textbox", { name: "Nombre", exact: true })
+    .fill("Azul de prueba");
+  await page.getByRole("button", { name: "Guardar pintura" }).click();
+  await page.getByRole("button", { name: "Crear mezcla" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "#B05040" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Paleta de referencia")).toBeChecked();
+  await expect(page.getByText("Empieza con colores básicos")).toBeVisible();
 });

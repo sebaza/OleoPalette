@@ -29,13 +29,23 @@ export function recipeTitle(mode: "mine" | "reference", index: number): string {
     : `Otra mezcla ${index + 1}`;
 }
 
+export function initialMixMode(
+  paints: Pick<Paint, "available">[],
+): "mine" | "reference" {
+  return paints.some((paint) => paint.available) ? "mine" : "reference";
+}
+
 export function App() {
   const [section, setSection] = useState<Section>("home");
+  const [mixVisited, setMixVisited] = useState(false);
   const [paints, setPaints] = useState<Paint[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [observations, setObservations] = useState<MixObservation[]>([]);
   const [targetHex, setTargetHex] = useState<string | null>(null);
-  const [mode, setMode] = useState<"mine" | "reference">("mine");
+  const [selectedMode, setSelectedMode] = useState<"mine" | "reference" | null>(
+    null,
+  );
+  const mode = selectedMode ?? initialMixMode(paints);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [working, setWorking] = useState(false);
   const [storageError, setStorageError] = useState("");
@@ -123,7 +133,10 @@ export function App() {
             </p>
             <button
               className="primary-action"
-              onClick={() => setSection("mix")}
+              onClick={() => {
+                setMixVisited(true);
+                setSection("mix");
+              }}
             >
               Crear una mezcla <span aria-hidden="true">→</span>
             </button>
@@ -161,8 +174,8 @@ export function App() {
             </div>
           </section>
         )}
-        {section === "mix" && (
-          <section className="page">
+        {mixVisited && (
+          <section className="page" hidden={section !== "mix"}>
             <div className="eyebrow">CREAR MEZCLA</div>
             <h1>Encuentra tu color</h1>
             <p className="intro">
@@ -174,23 +187,11 @@ export function App() {
                 invalidateRecipes();
               }}
               onPick={(hex) => {
+                setSelectedMode((current) => current ?? mode);
                 invalidateRecipes();
                 setTargetHex(hex);
               }}
             />
-            {targetHex && (
-              <div className="surface target-summary">
-                <div
-                  className="swatch large"
-                  style={{ background: targetHex }}
-                />
-                <div>
-                  <small>COLOR SELECCIONADO</small>
-                  <strong>{targetHex.toUpperCase()}</strong>
-                  <p>Color aparente de la fotografía</p>
-                </div>
-              </div>
-            )}
             <p className="hint">
               La luz, la cámara y la pantalla pueden alterar el color. La mezcla
               final requiere una prueba real.
@@ -204,7 +205,7 @@ export function App() {
                     name="mode"
                     checked={mode === "mine"}
                     onChange={() => {
-                      setMode("mine");
+                      setSelectedMode("mine");
                       invalidateRecipes();
                     }}
                   />{" "}
@@ -218,7 +219,7 @@ export function App() {
                     name="mode"
                     checked={mode === "reference"}
                     onChange={() => {
-                      setMode("reference");
+                      setSelectedMode("reference");
                       invalidateRecipes();
                     }}
                   />{" "}
@@ -431,7 +432,10 @@ export function App() {
             key={item.id}
             type="button"
             aria-current={section === item.id ? "page" : undefined}
-            onClick={() => setSection(item.id)}
+            onClick={() => {
+              if (item.id === "mix") setMixVisited(true);
+              setSection(item.id);
+            }}
           >
             <span className="nav-symbol" aria-hidden="true">
               {item.symbol}

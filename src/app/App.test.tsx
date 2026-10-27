@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { App, recipeTitle } from "./App";
+import { App, initialMixMode, recipeTitle } from "./App";
 import { expect, it } from "vitest";
 
 it("has accessible primary navigation and a route into creating a mix", () => {
@@ -19,4 +19,10 @@ it("does not classify personal paints as specialized", () => {
   expect(recipeTitle("mine", 0)).toBe("Empieza con una mezcla sencilla");
   expect(recipeTitle("mine", 1)).toBe("Otra mezcla 2");
   expect(recipeTitle("reference", 1)).toBe("Opción más específica 2");
+});
+
+it("defaults to the reference palette when no owned paint is available", () => {
+  expect(initialMixMode([])).toBe("reference");
+  expect(initialMixMode([{ available: false }])).toBe("reference");
+  expect(initialMixMode([{ available: true }])).toBe("mine");
 });

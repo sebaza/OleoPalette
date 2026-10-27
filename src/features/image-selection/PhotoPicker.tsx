@@ -15,6 +15,7 @@ type Touch = {
   moved: boolean;
 };
 const FIT_VIEW: View = { zoom: 1, pan: { x: 0, y: 0 } };
+const FEEDBACK_HEIGHT = 44;
 
 export function PhotoPicker({ onPick, onReset }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,6 +29,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
   const [ready, setReady] = useState(false);
   const [sampleSize, setSampleSize] = useState(3);
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+  const [pickedHex, setPickedHex] = useState<string | null>(null);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -48,9 +50,10 @@ export function PhotoPicker({ onPick, onReset }: Props) {
   );
 
   const canvas = canvasRef.current;
+  const imageAreaHeight = Math.max(1, size.height - FEEDBACK_HEIGHT);
   const fitted =
     canvas && size.width && size.height
-      ? fitSize(canvas.width, canvas.height, size.width, size.height)
+      ? fitSize(canvas.width, canvas.height, size.width, imageAreaHeight)
       : { width: 0, height: 0 };
   const shownView = {
     zoom: view.zoom,
@@ -59,7 +62,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
       fitted.width,
       fitted.height,
       size.width,
-      size.height,
+      imageAreaHeight,
       view.zoom,
     ),
   };
@@ -71,7 +74,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
       fitted.width,
       fitted.height,
       size.width,
-      size.height,
+      imageAreaHeight,
       viewRef.current.zoom,
     );
     if (
@@ -80,7 +83,14 @@ export function PhotoPicker({ onPick, onReset }: Props) {
     ) {
       updateView({ ...viewRef.current, pan: nextPan });
     }
-  }, [ready, size.width, size.height, fitted.width, fitted.height]);
+  }, [
+    ready,
+    size.width,
+    size.height,
+    imageAreaHeight,
+    fitted.width,
+    fitted.height,
+  ]);
 
   function updateView(next: View) {
     viewRef.current = next;
@@ -94,6 +104,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
     setError("");
     setReady(false);
     setPoint(null);
+    setPickedHex(null);
     touches.current.clear();
     if (
       !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
@@ -138,16 +149,16 @@ export function PhotoPicker({ onPick, onReset }: Props) {
       .getContext("2d", { willReadFrequently: true })!
       .getImageData(left, top, width, height).data;
     try {
-      onPick(
-        samplePixels(
-          pixels,
-          width,
-          height,
-          pixel.x - left,
-          pixel.y - top,
-          sampleSize,
-        ),
+      const hex = samplePixels(
+        pixels,
+        width,
+        height,
+        pixel.x - left,
+        pixel.y - top,
+        sampleSize,
       );
+      onPick(hex);
+      setPickedHex(hex);
       setPoint(pixel);
     } catch {
       setError("Ese punto no tiene un color visible. Elige otro.");
@@ -180,9 +191,9 @@ export function PhotoPicker({ onPick, onReset }: Props) {
       zoomAt(
         viewRef.current,
         zoom,
-        { x: size.width / 2, y: size.height / 2 },
+        { x: size.width / 2, y: imageAreaHeight / 2 },
         size.width,
-        size.height,
+        imageAreaHeight,
         fitted.width,
         fitted.height,
       ),
@@ -220,10 +231,9 @@ export function PhotoPicker({ onPick, onReset }: Props) {
       )}
       <div
         ref={viewportRef}
-        className={`photo-viewport ${ready ? "has-photo" : ""}`}
+        className={`photo-viewport ${ready ? "has-photo" : ""} ${view.zoom > 1 ? "is-zoomed" : ""}`}
         onPointerDown={(event) => {
           if (!ready) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
           touches.current.set(event.pointerId, {
             x: event.clientX,
             y: event.clientY,
@@ -231,6 +241,12 @@ export function PhotoPicker({ onPick, onReset }: Props) {
             startY: event.clientY,
             moved: false,
           });
+          if (
+            viewRef.current.zoom > 1 ||
+            event.pointerType !== "touch" ||
+            touches.current.size > 1
+          )
+            event.currentTarget.setPointerCapture(event.pointerId);
           if (touches.current.size > 1)
             for (const touch of touches.current.values()) touch.moved = true;
         }}
@@ -261,7 +277,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
               viewRef.current.zoom * (newDistance / Math.max(1, oldDistance)),
               oldCenter,
               size.width,
-              size.height,
+              imageAreaHeight,
               fitted.width,
               fitted.height,
             );
@@ -270,7 +286,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
               fitted.width,
               fitted.height,
               size.width,
-              size.height,
+              imageAreaHeight,
               next.zoom,
             );
             updateView(next);
@@ -282,7 +298,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
               ) > 7
             )
               touch.moved = true;
-            if (touch.moved)
+            if (touch.moved && viewRef.current.zoom > 1)
               updateView({
                 ...viewRef.current,
                 pan: clampPan(
@@ -293,7 +309,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
                   fitted.width,
                   fitted.height,
                   size.width,
-                  size.height,
+                  imageAreaHeight,
                   viewRef.current.zoom,
                 ),
               });
@@ -308,6 +324,10 @@ export function PhotoPicker({ onPick, onReset }: Props) {
             pick(event.clientX, event.clientY);
         }}
         onPointerCancel={(event) => touches.current.delete(event.pointerId)}
+        onPointerLeave={(event) => {
+          if (!event.currentTarget.hasPointerCapture(event.pointerId))
+            touches.current.delete(event.pointerId);
+        }}
       >
         {!ready && (
           <div className="photo-placeholder">
@@ -388,7 +408,7 @@ export function PhotoPicker({ onPick, onReset }: Props) {
                   fitted.width *
                   shownView.zoom,
               top:
-                size.height / 2 +
+                imageAreaHeight / 2 +
                 shownView.pan.y +
                 (point.y / (canvasRef.current?.height || 1) - 0.5) *
                   fitted.height *
@@ -396,6 +416,23 @@ export function PhotoPicker({ onPick, onReset }: Props) {
             }}
             aria-hidden="true"
           />
+        )}
+        {ready && (
+          <div className="photo-feedback" role="status">
+            {pickedHex ? (
+              <>
+                <span
+                  className="photo-feedback-swatch"
+                  style={{ background: pickedHex }}
+                  aria-hidden="true"
+                />
+                <span>COLOR SELECCIONADO</span>
+                <strong>{pickedHex.toUpperCase()}</strong>
+              </>
+            ) : (
+              <span>Toca la foto para elegir un color</span>
+            )}
+          </div>
         )}
       </div>
       {ready && (
